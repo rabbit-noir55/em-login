@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 #pip install requests beautifulsoup4 easyocr numpy opencv-python pillow rich openpyxl
 from rich.console import Console
 from rich.prompt import Prompt
@@ -72,97 +73,108 @@ def solve_captcha(image_url):
     captcha_text = ''.join(filter(str.isdigit, ''.join(result)))
     return captcha_text
 
-def x2():
-    import time
-    import base64
-    import os
-    import numpy as np
-    from io import BytesIO
-    from PIL import Image
-    import easyocr
-    from selenium import webdriver
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.chrome.service import Service
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
-    from webdriver_manager.chrome import ChromeDriverManager
-
-    def process_captcha(image):
-        """EasyOCR yordamida CAPTCHA ni o‘qish"""
-        reader = easyocr.Reader(["en"])
-        result = reader.readtext(np.array(image), detail=0)
-        return "".join(result)
+import time
+import base64
+import numpy as np
+from io import BytesIO
+from PIL import Image
+import easyocr
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 
 
-    def auto_login(login, password):
-        """Avtomatik login qilish, xato bo‘lsa qayta urinadi"""
-        while True:
-            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
-            driver.get("https://login.emaktab.uz/")
-            time.sleep(2)
-            
-            driver.find_element(By.NAME, "login").send_keys(login)
-            driver.find_element(By.NAME, "password").send_keys(password)
-            driver.find_element(By.NAME, "password").submit()
-            
-            if len(driver.window_handles) > 1:
-                driver.switch_to.window(driver.window_handles[-1])
-                time.sleep(2)
-            
-            try:
-                captcha_element = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.XPATH, "//img[@alt='captcha image']"))
-                )
+def faqat_raqamlar(matn: str) -> str:
+    """Extracts numbers from the text."""
+    return ''.join(filter(str.isdigit, matn))
 
-                captcha_text = ""
-                for attempt in range(1):
-                    captcha_url = captcha_element.get_attribute("src")
-                    
-                    if "data:image" in captcha_url:
-                        captcha_base64 = captcha_url.split(",")[1]
-                        captcha_bytes = base64.b64decode(captcha_base64)
-                        captcha_img = Image.open(BytesIO(captcha_bytes))
-                    else:
-                        captcha_element.screenshot("captcha.png")
-                        captcha_img = Image.open("captcha.png")
-                    
-                    captcha_text = process_captcha(captcha_img)
-                    
-                    if captcha_text:
-                        print(f"🔍 CAPTCHA topildi: {captcha_text}")
-                        break
-                    else:
-                        print(f"🔄 {attempt + 1}-urinishda CAPTCHA topilmadi, qayta urinib ko‘rilmoqda...")
-                        time.sleep(2)
-                
-                if not captcha_text:
-                    captcha_text = input(f"Ekrandagi CAPTCHA'ni qo‘lda kiriting ({login}): ")
-                
-                driver.find_element(By.XPATH, "//input[@title='Rasmdagi belgilarni kiriting']").send_keys(captcha_text)
-                driver.find_element(By.XPATH, "//input[@title='Rasmdagi belgilarni kiriting']").submit()
-                
-                time.sleep(3)
-                
-                current_url = driver.current_url
-                if "userfeed" in current_url:
-                    print(f"✅ {login} uchun muvaffaqiyatli login qildik!")
-                    driver.quit()
+
+def process_captcha(image):
+    """Uses EasyOCR to read the CAPTCHA."""
+    reader = easyocr.Reader(["en"])
+    result = reader.readtext(np.array(image), detail=0)
+    return faqat_raqamlar(result)
+
+
+def auto_login(login, password):
+    """Automates login with retry attempts for each login/password combination."""
+    max_attempts = 8
+    for attempt in range(max_attempts):
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
+        driver.get("https://login.emaktab.uz/")
+        time.sleep(5)
+
+        driver.find_element(By.NAME, "login").send_keys(login)
+        driver.find_element(By.NAME, "password").send_keys(password)
+        driver.find_element(By.NAME, "password").submit()
+
+        if len(driver.window_handles) > 1:
+            driver.switch_to.window(driver.window_handles[-1])
+            time.sleep(3)
+
+        try:
+            captcha_element = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, "//img[@alt='captcha image']"))
+            )
+
+            captcha_text = ""
+            for captcha_attempt in range(1):  # Retry 3 times for CAPTCHA if OCR fails
+                captcha_url = captcha_element.get_attribute("src")
+
+                if "data:image" in captcha_url:
+                    captcha_base64 = captcha_url.split(",")[1]
+                    captcha_bytes = base64.b64decode(captcha_base64)
+                    captcha_img = Image.open(BytesIO(captcha_bytes))
+                else:
+                    captcha_element.screenshot("captcha.png")
+                    captcha_img = Image.open("captcha.png")
+
+                captcha_text = process_captcha(captcha_img)
+
+                if captcha_text:
+                    print(f"🔍 CAPTCHA topildi: {captcha_text}")
                     break
                 else:
-                    print(f"❌ {login} uchun login amalga oshmadi! CAPTCHA yoki boshqa muammo bo‘lishi mumkin.")
-                    driver.quit()
+                    print(f"🔄 CAPTCHA topilmadi, {captcha_attempt + 1}-urinishda qayta urinib ko‘rilmoqda...")
                     time.sleep(5)
-            except Exception as e:
-                print(f"❌ {login} uchun xatolik yuz berdi: {str(e)}")
+
+            driver.find_element(By.XPATH, "//input[@title='Rasmdagi belgilarni kiriting']").send_keys(captcha_text)
+            driver.find_element(By.XPATH, "//input[@title='Rasmdagi belgilarni kiriting']").submit()
+
+            time.sleep(5)
+
+            current_url = driver.current_url
+            if "userfeed" in current_url:
+                print(f"✅ {login} uchun muvaffaqiyatli login qildik!")
+                driver.quit()
+                break
+            else:
+                print(f"❌ {login} uchun login amalga oshmadi! CAPTCHA yoki boshqa muammo bo‘lishi mumkin.")
+                if attempt == max_attempts - 1:
+                    print(f"❗ {login} uchun barcha urinishlar tugadi. Keyingi login parolga o'tildi.")
+                    driver.quit()
+                    break
                 driver.quit()
                 time.sleep(5)
 
-    # Login va parollar
-    login_list = get_data_from_json("a")
-    password_list = get_data_from_json("b")
+        except Exception as e:
+            print(f"❌ {login} uchun xatolik yuz berdi: {str(e)}")
+            driver.quit()
+            time.sleep(5)
+
+
+# Login and password lists
+login_list = ["dimamatdinov"]
+
+password_list = ["imamatdinov11"]
+def mm():
 
     for login, password in zip(login_list, password_list):
         auto_login(login, password)
+
 def x():
     
     # Login qilish uchun saytning to‘g‘ri URL manzilini kiriting
@@ -311,7 +323,7 @@ def main_menu():
         if choice in "1":
             x_function()
         if choice in "2":
-            x2()
+            mm()
         elif choice == "3":
             edit_data_section()
         elif choice == "4":
