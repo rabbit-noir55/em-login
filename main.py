@@ -100,6 +100,7 @@ def process_captcha(image):
 
 
 def auto_login(login, password):
+    xato=[]
     """Automates login with retry attempts for each login/password combination."""
     max_attempts = 8
     for attempt in range(max_attempts):
@@ -155,6 +156,7 @@ def auto_login(login, password):
                 print(f"❌ {login} uchun login amalga oshmadi! CAPTCHA yoki boshqa muammo bo‘lishi mumkin.")
                 if attempt == max_attempts - 1:
                     print(f"❗ {login} uchun barcha urinishlar tugadi. Keyingi login parolga o'tildi.")
+                    xato.append(login)
                     driver.quit()
                     break
                 driver.quit()
@@ -165,11 +167,12 @@ def auto_login(login, password):
             driver.quit()
             time.sleep(5)
 
-
+    print(xato,"ushbu login xato qattiq urinildi lekin kirolmadik )
 # Login and password lists
 login_list = ["dimamatdinov"]
 
 password_list = ["imamatdinov11"]
+
 def mm():
 
     for login, password in zip(login_list, password_list):
